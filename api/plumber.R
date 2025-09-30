@@ -44,9 +44,9 @@ function() {
 
 #* Health check endpoint
 #* @get /healthz
-function() {
   list(status = "API is up and running")
 }
+
 # Test endpoints:
 # http://localhost:8000/clock/estimate?format=json
 # http://localhost:8000/clock/estimate?format=sdmx
