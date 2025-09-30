@@ -7,6 +7,12 @@ source("sdmx-utils.R")
 source("population-logic.R")
 source("helpers.R")
 
+#* @filter cors
+function(req, res) {
+  res$setHeader("Access-Control-Allow-Origin", "*")
+  plumber::forward()
+}
+
 #* @apiTitle Population Clock API
 
 #* Get current population estimate (SDMX XML, SDMX-JSON, or regular JSON)
@@ -34,13 +40,14 @@ function(format = "json", res) {
 #* @get /clock/parameters
 function() {
   list(
-    population_start = population_start,
-    birth_rate_per_sec = birth_rate_per_sec,
-    death_rate_per_sec = death_rate_per_sec,
-    migration_rate_per_sec = migration_rate_per_sec,
-    clock_start = format(clock_start, "%Y-%m-%d %H:%M:%S", tz = "UTC")
+    population_start = as.numeric(population_start)[1],
+    birth_rate_per_sec = as.numeric(birth_rate_per_sec)[1],
+    death_rate_per_sec = as.numeric(death_rate_per_sec)[1],
+    migration_rate_per_sec = as.numeric(migration_rate_per_sec)[1],
+    clock_start = as.character(clock_start)[1]
   )
 }
+
 
 #* Health check endpoint
 #* @get /healthz
