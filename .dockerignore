@@ -1,0 +1,23 @@
+# Ignore R history and session files
+.Rhistory
+.RData
+.Rproj.user
+
+# Ignore renv cache (use Docker image cache instead)
+renv/cache/
+
+# Ignore git and GitHub files
+.git
+.gitignore
+.github/
+
+# Ignore documentation and test output
+*.md
+tests/
+docs/
+
+# Ignore data files if not needed in container
+data/
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
