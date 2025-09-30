@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Population Clock Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f5f8fa;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    .clock-container {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 2px 16px #0001;
+      display: inline-block;
+      margin: 3em auto;
+      padding: 2.5em 2em 2em 2em;
+    }
+    .main-count {
+      font-size: 3.5em;
+      font-weight: bold;
+      color: #0086b3;
+      margin-bottom: 1em;
+      letter-spacing: 0.05em;
+      transition: color 0.3s;
+    }
+    .sub-counts {
+      display: flex;
+      justify-content: center;
+      gap: 2em;
+      margin-bottom: 1em;
+    }
+    .sub-counts div {
+      font-size: 1.2em;
+    }
+    .timestamp {
+      color: #666;
+      font-size: 0.95em;
+      margin-top: 1em;
+    }
+    @media (max-width: 600px) {
+      .clock-container {
+        padding: 1em 0.3em 1em 0.3em;
+      }
+      .main-count {
+        font-size: 2em;
+      }
+      .sub-counts div {
+        font-size: 1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="clock-container">
+    <div class="main-count" id="pop-estimate">Loading…</div>
+    <div class="sub-counts">
+      <div>Births: <span id="births">0</span></div>
+      <div>Deaths: <span id="deaths">0</span></div>
+      <div>Net migration: <span id="migration">0</span></div>
+    </div>
+    <div class="timestamp" id="timestamp"></div>
+  </div>
+  <script>
+    // --- CONFIG ---
+    // Replace with your deployed Plumber API endpoint:
+    const API_URL = "http://localhost:8000/clock/estimate?format=json"; // Change as needed!
+    const SYNC_INTERVAL = 30000; // ms between backend syncs
+    const ANIMATION_INTERVAL = 50; // ms between animation frames
+
+    // --- UTILITY FUNCTION TO HANDLE ARRAY/SCALAR VALUES ---
+    function extractValue(x) {
+      if (Array.isArray(x)) {
+        return x.length > 0 ? x[0] : 0;
+      }
+      return x;
+    }
+
+    // --- STATE ---
+    let lastData = null;
+    let lastTimestamp = null;
+    let rates = {};
+
+    // --- UI HELPERS ---
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    // --- ANIMATION LOOP ---
+    function animateCounters() {
+      if (!lastData || !lastTimestamp || !rates.population) return;
+      const now = new Date();
+      const elapsed = (now - lastTimestamp) / 1000;
+      // Compute new values using extractValue for all fields
+      const pop = extractValue(lastData.estimate) + elapsed * rates.population;
+      const births = extractValue(lastData.births) + elapsed * rates.births;
+      const deaths = extractValue(lastData.deaths) + elapsed * rates.deaths;
+      const migration = extractValue(lastData.migration) + elapsed * rates.migration;
+      // Update UI
+      setText("pop-estimate", Math.floor(pop).toLocaleString());
+      setText("births", Math.floor(births).toLocaleString());
+      setText("deaths", Math.floor(deaths).toLocaleString());
+      setText("migration", Math.floor(migration).toLocaleString());
+    }
+
+    // --- FETCH LOGIC ---
+    async function fetchAndReset() {
+      try {
+        const resp = await fetch(API_URL);
+        if (!resp.ok) throw new Error("API error: " + resp.status);
+        const data = await resp.json();
+
+        // Use extractValue for all fields
+        const estimate = extractValue(data.estimate);
+        const births = extractValue(data.births);
+        const deaths = extractValue(data.deaths);
+        const migration = extractValue(data.migration);
+        const timestamp = extractValue(data.timestamp);
+
+        // Estimate rates if possible
+        if (lastData && lastTimestamp) {
+          const dt = (new Date(timestamp.replace(' ', 'T') + 'Z') - lastTimestamp) / 1000;
+          rates.population = (estimate - extractValue(lastData.estimate)) / dt;
+          rates.births = (births - extractValue(lastData.births)) / dt;
+          rates.deaths = (deaths - extractValue(lastData.deaths)) / dt;
+          rates.migration = (migration - extractValue(lastData.migration)) / dt;
+        } else {
+          // Fallback rates (customize as needed)
+          rates.population = (births - deaths + migration) / 3600;
+          rates.births = 0.425;
+          rates.deaths = 0.17;
+          rates.migration = 0.09;
+        }
+        lastData = data;
+        lastTimestamp = new Date(timestamp.replace(' ', 'T') + 'Z'); // UTC
+        setText("timestamp", "As at: " + timestamp + " UTC");
+        animateCounters();
+      } catch (e) {
+        setText("pop-estimate", "Error!");
+        setText("timestamp", "API not reachable or returned error.");
+        setText("births", 0);
+        setText("deaths", 0);
+        setText("migration", 0);
+      }
+    }
+
+    // --- SETUP ---
+    fetchAndReset();
+    setInterval(fetchAndReset, SYNC_INTERVAL);
+    setInterval(animateCounters, ANIMATION_INTERVAL);
+  </script>
+</body>
+</html>
