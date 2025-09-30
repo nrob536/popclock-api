@@ -44,6 +44,7 @@ function() {
 
 #* Health check endpoint
 #* @get /healthz
+function () {
   list(status = "API is up and running")
 }
 
