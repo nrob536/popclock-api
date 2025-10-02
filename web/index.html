@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Population Clock Demo</title>
+  
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f5f8fa;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+    .clock-container {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 2px 16px #0001;
+      display: inline-block;
+      margin: 3em auto;
+      padding: 2.5em 2em 2em 2em;
+    }
+    .main-count {
+      font-size: 3.5em;
+      font-weight: bold;
+      color: #0086b3;
+      margin-bottom: 1em;
+      letter-spacing: 0.05em;
+      transition: color 0.3s;
+    }
+    .sub-counts {
+      display: flex;
+      justify-content: center;
+      gap: 2em;
+      margin-bottom: 1em;
+    }
+    .sub-counts div {
+      font-size: 1.2em;
+    }
+    .timestamp {
+      color: #666;
+      font-size: 0.95em;
+      margin-top: 1em;
+    }
+    .caveat {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5em;
+      margin: 2em auto;
+      max-width: 800px;
+      text-align: left;
+      font-size: 0.9em;
+      line-height: 1.6;
+      color: #333;
+    }
+    .caveat h3 {
+      margin-top: 0;
+      color: #0086b3;
+      font-size: 1.1em;
+    }
+    .caveat p {
+      margin: 1em 0;
+    }
+    .caveat ul {
+      margin: 1em 0;
+      padding-left: 1.5em;
+    }
+    .demo-disclaimer {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      padding: 1em;
+      margin: 1em auto;
+      max-width: 800px;
+      text-align: center;
+      font-weight: bold;
+      color: #856404;
+    }
+    .demo-disclaimer .warning-icon {
+      font-size: 1.5em;
+      margin-right: 0.5em;
+    }
+    @media (max-width: 600px) {
+      .clock-container {
+        padding: 1em 0.3em 1em 0.3em;
+      }
+      .main-count {
+        font-size: 2em;
+      }
+      .sub-counts div {
+        font-size: 1em;
+      }
+      .caveat {
+        margin: 1em;
+        padding: 1em;
+        font-size: 0.85em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-disclaimer">
+    <span class="warning-icon">⚠️</span>
+    <strong>DEMO ONLY:</strong> This population clock displays synthetically generated data for demonstration purposes only. 
+    The numbers shown are not actual New Zealand population statistics.
+  </div>
+  
+  <div class="clock-container">
+    <div class="main-count" id="pop-estimate">Loading…</div>
+    <div class="sub-counts">
+      <div>Births: <span id="births">0</span></div>
+      <div>Deaths: <span id="deaths">0</span></div>
+      <div>Net migration: <span id="migration">0</span></div>
+    </div>
+    <div class="timestamp" id="timestamp"></div>
+  </div>
+  
+  <div class="caveat">
+    <h3>About the Population Clock</h3>
+    <p><strong>⚠️ IMPORTANT:</strong> The data displayed in this demonstration is <strong>synthetically generated</strong> and does not represent actual New Zealand population statistics. This is a technical demonstration only.</p>
+    <p>In a real implementation, New Zealand's population would be estimated as published by Satistics NZ:</p>
+    <p>https://www.stats.govt.nz/tools/population-clock/</p> 
+    <p> based on current methodology the population is expected to increase by one person every 21 minutes and 2 seconds.</p>
+    <p>This is based on the estimated resident population at 31 March 2025 and the following forecasts:</p>
+    <ul>
+      <li>one birth every 9 minutes and 1 second</li>
+      <li>one death every 14 minutes and 46 seconds</li>
+      <li>one net migration every 3 hours, 52 minutes and 9 seconds.</li>
+    </ul>
+    <p>The forecasts are based on recent trends and do not necessarily reflect actual population change.</p>
+    <p>The population clock is based on the estimated resident population and does not correspond to the census usually resident population count or census night population count.</p>
+    <p>The estimated resident population is derived from the 2023 Census usually resident population count, with adjustments for people missed or counted more than once by the census (net census undercount), residents temporarily overseas on census night, and population change since census night.</p>
+    <p><strong>For the latest available data on population, births, deaths, and migration see:</strong></p>
+    <ul>
+      <li><strong>Estimates and projections</strong> – information about the current and future New Zealand population.</li>
+      <li><strong>Population indicators</strong> – summary of New Zealand's key demographic statistics (population, births, deaths, marriages, migration etc).</li>
+    </ul>
+  </div>
+  <script>
+    // --- CONFIG ---
+    // Replace with your deployed Plumber API endpoint:
+    //const API_URL = "https://popclock-api.onrender.com/clock/estimate?format=json"; Local development
+    const API_URL = "https://popclock-api.onrender.com/clock/estimate?format=json"; // Remote deployment
+    const SYNC_INTERVAL = 30000; // ms between backend syncs
+    const TIMESTAMP_UPDATE_INTERVAL = 1000; // ms between timestamp updates (1 second)
+    
+    // Population change rates (based on NZ Stats approach)
+    const POPULATION_CHANGE_INTERVAL = 21 * 60 + 2; // seconds (21 minutes 2 seconds per person)
+    const BIRTH_INTERVAL = 9 * 60 + 1; // seconds (9 minutes 1 second per birth)
+    const DEATH_INTERVAL = 14 * 60 + 46; // seconds (14 minutes 46 seconds per death)
+    const MIGRATION_INTERVAL = 3 * 3600 + 52 * 60 + 9; // seconds (3 hours 52 minutes 9 seconds per net migration)
+
+    // --- UTILITY FUNCTION TO HANDLE ARRAY/SCALAR VALUES ---
+    function extractValue(x) {
+      if (Array.isArray(x)) {
+        return x.length > 0 ? x[0] : 0;
+      }
+      return x;
+    }
+
+    // --- STATE ---
+    let lastData = null;
+    let lastTimestamp = null;
+    let baseTimestamp = null; // Base time for calculations
+    let currentTime = new Date(); // Current time for real-time updates
+
+    // --- UI HELPERS ---
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    // --- UPDATE FUNCTIONS ---
+    function updateTimestamp() {
+      currentTime = new Date();
+      setText("timestamp", "Updated: " + currentTime.toLocaleString());
+    }
+    
+    function updatePopulationEstimates() {
+      if (!lastData || !baseTimestamp) return;
+      
+      const now = new Date();
+      const elapsedSeconds = (now - baseTimestamp) / 1000;
+      
+      // Calculate changes based on NZ Stats intervals
+      const populationIncrease = Math.floor(elapsedSeconds / POPULATION_CHANGE_INTERVAL);
+      const birthIncrease = Math.floor(elapsedSeconds / BIRTH_INTERVAL);
+      const deathIncrease = Math.floor(elapsedSeconds / DEATH_INTERVAL);
+      const migrationIncrease = Math.floor(elapsedSeconds / MIGRATION_INTERVAL);
+      
+      // Update estimates from base data
+      const newPop = extractValue(lastData.estimate) + populationIncrease;
+      const newBirths = extractValue(lastData.births) + birthIncrease;
+      const newDeaths = extractValue(lastData.deaths) + deathIncrease;
+      const newMigration = extractValue(lastData.migration) + migrationIncrease;
+      
+      // Update UI
+      setText("pop-estimate", newPop.toLocaleString());
+      setText("births", newBirths.toLocaleString());
+      setText("deaths", newDeaths.toLocaleString());
+      setText("migration", newMigration.toLocaleString());
+    }
+
+    // --- FETCH LOGIC ---
+    async function fetchAndReset() {
+      try {
+        const resp = await fetch(API_URL);
+        if (!resp.ok) throw new Error("API error: " + resp.status);
+        const data = await resp.json();
+
+        // Use extractValue for all fields
+        const estimate = extractValue(data.estimate);
+        const births = extractValue(data.births);
+        const deaths = extractValue(data.deaths);
+        const migration = extractValue(data.migration);
+        const timestamp = extractValue(data.timestamp);
+
+        // Set base data for calculations
+        lastData = data;
+        lastTimestamp = new Date(timestamp.replace(' ', 'T') + 'Z'); // UTC
+        baseTimestamp = new Date(); // Use current time as base for calculations
+        
+        // Initial display update
+        setText("pop-estimate", estimate.toLocaleString());
+        setText("births", births.toLocaleString());
+        setText("deaths", deaths.toLocaleString());
+        setText("migration", migration.toLocaleString());
+        setText("timestamp", "Data as at: " + timestamp + " UTC");
+        
+        updatePopulationEstimates();
+      } catch (e) {
+        setText("pop-estimate", "Error!");
+        setText("timestamp", "API not reachable or returned error.");
+        setText("births", 0);
+        setText("deaths", 0);
+        setText("migration", 0);
+      }
+    }
+
+    // --- SETUP ---
+    fetchAndReset();
+    setInterval(fetchAndReset, SYNC_INTERVAL);
+    setInterval(updateTimestamp, TIMESTAMP_UPDATE_INTERVAL);
+    setInterval(updatePopulationEstimates, POPULATION_CHANGE_INTERVAL * 1000); // Update when population should change
+  </script>
+</body>
+</html>
